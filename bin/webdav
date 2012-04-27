@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+# Environment Variables
+#
+#   JAVA_HOME        The java implementation to use.  Overrides JAVA_HOME.
+#
+#   HADOOP_HOME      The Hadoop home directory, for native libs
+#
+#   WEBDAV_HOME      The hdfs-webdav home directory
+#
+#   WEBDAV_CLASSPATH Extra Java CLASSPATH entries.
+#
+#   WEBDAV_HEAPSIZE  The maximum amount of heap to use, in MB. 
+#                    Default is 1000.
+#
+#   WEBDAV_OPTS      Extra Java runtime options.
+#   
+#   WEBDAV_CONF_DIR  Alternate conf dir. Default is ${WEBDAV_HOME}/conf.
+#
+#   WEBDAV_ROOT_LOGGER The root appender. Default is INFO,console
+#
+
+bin=`dirname "$0"`
+bin=`cd "$bin"; pwd`
+
+. "$bin"/webdav-config.sh
+
+cygwin=false
+case "`uname`" in
+CYGWIN*) cygwin=true;;
+esac
+
+# get arguments
+COMMAND=$1
+shift
+
+if [ -f "${WEBDAV_CONF_DIR}/webdav-env.sh" ]; then
+  . "${WEBDAV_CONF_DIR}/webdav-env.sh"
+fi
+
+# some Java parameters
+if [ "$JAVA_HOME" != "" ]; then
+  #echo "run java in $JAVA_HOME"
+  JAVA_HOME=$JAVA_HOME
+fi
+  
+if [ "$JAVA_HOME" = "" ]; then
+  echo "Error: JAVA_HOME is not set."
+  exit 1
+fi
+
+JAVA=$JAVA_HOME/bin/java
+JAVA_HEAP_MAX=-Xmx1000m 
+
+# check envvars which might override default args
+if [ "$WEBDAV_HEAPSIZE" != "" ]; then
+  #echo "run with heapsize $WEBDAV_HEAPSIZE"
+  JAVA_HEAP_MAX="-Xmx""$WEBDAV_HEAPSIZE""m"
+  #echo $JAVA_HEAP_MAX
+fi
+
+# CLASSPATH initially contains $WEBDAV_CONF_DIR
+CLASSPATH="$WEBDAV_CONF_DIR"
+CLASSPATH="$CLASSPATH:$JAVA_HOME/lib/tools.jar"
+if [ "$WEBDAV_CLASSPATH" != "" ] ; then
+  CLASSPATH="$CLASSPATH:$WEBDAV_CLASSPATH"
+fi
+
+# so that filenames w/ spaces are handled correctly in loops below
+IFS=
+
+for f in $WEBDAV_HOME/hdfs-webdav-*.jar; do
+  CLASSPATH="$CLASSPATH:$f";
+done
+for f in $WEBDAV_HOME/lib/*.jar; do
+  CLASSPATH="$CLASSPATH:$f";
+done
+
+# default log directory & file
+if [ "$WEBDAV_LOG_DIR" = "" ]; then
+  WEBDAV_LOG_DIR="$WEBDAV_HOME/logs"
+fi
+if [ "$WEBDAV_LOGFILE" = "" ]; then
+  WEBDAV_LOGFILE='webdav.log'
+fi
+
+# restore ordinary behaviour
+unset IFS
+
+# cygwin path translation
+if $cygwin; then
+  CLASSPATH=`cygpath -p -w "$CLASSPATH"`
+  HADOOP_HOME=`cygpath -w "$HADOOP_HOME"`
+  WEBDAV_HOME=`cygpath -w "$WEBDAV_HOME"`
+  WEBDAV_LOG_DIR=`cygpath -w "$WEBDAV_LOG_DIR"`
+  TOOL_PATH=`cygpath -p -w "$TOOL_PATH"`
+  JAVA_LIBRARY_PATH=`cygpath -p -w "$JAVA_LIBRARY_PATH"`
+fi
+
+# setup 'java.library.path' for native-hadoop code if available
+if [ -d "${HADOOP_HOME}/build/native" -o -d "${HADOOP_HOME}/lib/native" -o -d "${HADOOP_HOME}/sbin" ]; then
+  JAVA_PLATFORM=`CLASSPATH=${CLASSPATH} ${JAVA} -Xmx32m org.apache.hadoop.util.PlatformName | sed -e "s/ /_/g"`
+  if [ -d "${HADOOP_HOME}/lib/native" ]; then
+    if [ "x$JAVA_LIBRARY_PATH" != "x" ]; then
+      JAVA_LIBRARY_PATH=${JAVA_LIBRARY_PATH}:${HADOOP_HOME}/lib/native/${JAVA_PLATFORM}
+    else
+      JAVA_LIBRARY_PATH=${HADOOP_HOME}/lib/native/${JAVA_PLATFORM}
+    fi
+  fi
+fi
+
+# cygwin path translation
+if $cygwin; then
+  JAVA_LIBRARY_PATH=`cygpath -p "$JAVA_LIBRARY_PATH"`
+fi
+
+WEBDAV_OPTS="$WEBDAV_OPTS -Dwebdav.log.dir=$WEBDAV_LOG_DIR"
+WEBDAV_OPTS="$WEBDAV_OPTS -Dwebdav.log.file=$WEBDAV_LOGFILE"
+WEBDAV_OPTS="$WEBDAV_OPTS -Dwebdav.home.dir=$WEBDAV_HOME"
+WEBDAV_OPTS="$WEBDAV_OPTS -Dwebdav.root.logger=${WEBDAV_ROOT_LOGGER:-INFO,console}"
+
+if [ "x$JAVA_LIBRARY_PATH" != "x" ]; then
+  WEBDAV_OPTS="$WEBDAV_OPTS -Djava.library.path=$JAVA_LIBRARY_PATH"
+fi  
+
+exec $JAVA $JAVA_HEAP_MAX $WEBDAV_OPTS -classpath "$CLASSPATH" com.trendmicro.hdfs.webdav.Main "$@"

@@ -1,5 +1,6 @@
 package com.trendmicro.hdfs.webdav;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
@@ -14,14 +15,16 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
+import org.mortbay.jetty.Connector;
+import org.mortbay.jetty.Server;
+import org.mortbay.jetty.nio.SelectChannelConnector;
+import org.mortbay.jetty.servlet.Context;
+import org.mortbay.jetty.servlet.FilterHolder;
+import org.mortbay.jetty.servlet.ServletHolder;
 
-import com.yammer.metrics.jetty.InstrumentedSelectChannelConnector;
 import com.yammer.metrics.reporting.GangliaReporter;
 import com.yammer.metrics.web.DefaultWebappMetricsFilter;
 
@@ -40,8 +43,8 @@ public class Main {
 
   private static InetSocketAddress getAddress(Configuration conf) {
     return NetUtils.createSocketAddr(
-      conf.get("webdav.bind.address", "0.0.0.0"),
-      conf.getInt("webdav.port", 8080));
+      conf.get("hadoop.webdav.bind.address", "0.0.0.0"),
+      conf.getInt("hadoop.webdav.port", 8080));
   }
 
   public static void main(String[] args) {
@@ -52,25 +55,36 @@ public class Main {
     // Process command line 
 
     Options options = new Options();
+    options.addOption("d", "debug", false, "Enable debug logging");
     options.addOption("p", "port", true, "Port to bind to [default: 8080]");
-    options.addOption("b", "bind-address", true, "Address bind to [default: 0.0.0.0]");
+    options.addOption("b", "bind-address", true,
+      "Address or hostname to bind to [default: 0.0.0.0]");
     options.addOption("g", "ganglia", true,
       "Send Ganglia metrics to host:port [default: none]");
 
-    String gangliaHost = null;
-    int gangliaPort = 8649;
     CommandLine cmd = null;
     try {
       cmd = new PosixParser().parse(options, args);
     } catch (ParseException e) {
       printUsageAndExit(options, -1);
     }
+
+    if (cmd.hasOption('d')) {
+      Logger rootLogger = Logger.getLogger("com.trendmicro");
+      rootLogger.setLevel(Level.DEBUG);
+    }
+
     if (cmd.hasOption('b')) {
-      conf.set("webdav.bind.address", cmd.getOptionValue('b'));
+      conf.set("hadoop.webdav.bind.address", cmd.getOptionValue('b'));
     }
+
     if (cmd.hasOption('p')) {
-      conf.setInt("webdav.port", Integer.valueOf(cmd.getOptionValue('p')));
+      conf.setInt("hadoop.webdav.port",
+        Integer.valueOf(cmd.getOptionValue('p')));
     }
+
+    String gangliaHost = null;
+    int gangliaPort = 8649;
     if (cmd.hasOption('g')) {
       String val = cmd.getOptionValue('g');
       if (val.indexOf(':') != -1) {
@@ -82,16 +96,19 @@ public class Main {
       }
     }
 
+    InetSocketAddress addr = getAddress(conf);
+
     // Log in the server principal from keytab
 
-    InetSocketAddress addr = getAddress(conf);    
     UserGroupInformation.setConfiguration(conf);
-    try {
-      SecurityUtil.login(conf, "webdav.keytab.file", 
-        "webdav.kerberos.principal", addr.getHostName());
-    } catch (Exception e) {
-      LOG.fatal("Unable to log in", e);
-      System.err.println("Unable to log in");
+    if (UserGroupInformation.isSecurityEnabled()) try {
+      SecurityUtil.login(conf,
+        conf.get("hadoop.webdav.server.kerberos.keytab"),
+        conf.get("hadoop.webdav.server.kerberos.principal"),
+        addr.getHostName());
+    } catch (IOException e) {
+      LOG.fatal("Could not log in", e);
+      System.err.println("Could not log in");
       System.exit(-1);
     }
 
@@ -104,23 +121,25 @@ public class Main {
     server.setStopAtShutdown(true);
 
     // Set up connector
-    Connector connector =
-      new InstrumentedSelectChannelConnector(addr.getPort());
+    Connector connector = new SelectChannelConnector();
+    connector.setPort(addr.getPort());
     connector.setHost(addr.getHostName());
     server.addConnector(connector);
     LOG.info("Listening on " + addr);
 
     // Set up context
-    ServletContextHandler context =
-      new ServletContextHandler(ServletContextHandler.SESSIONS);
-    context.setContextPath("/");
+    Context context = new Context(server, "/", Context.SESSIONS);
         // WebDAV servlet
-    context.addServlet(new ServletHolder(servlet), "/*");
+    ServletHolder servletHolder = new ServletHolder(servlet);
+    servletHolder.setInitParameter("authenticate-header",
+      "Basic realm=\"Hadoop WebDAV Server\"");
+    context.addServlet(servletHolder, "/*");
         // metrics instrumentation filter
     context.addFilter(new FilterHolder(new DefaultWebappMetricsFilter()),
       "/*", 0);
         // auth filter
     context.addFilter(new FilterHolder(new AuthFilter(conf)), "/*", 0);
+    server.setHandler(context);
 
     // Set up Ganglia metrics reporting
     if (gangliaHost != null) {

@@ -6,8 +6,8 @@
   <groupId>com.trendmicro.hadoop</groupId>
   <artifactId>hdfs-webdav</artifactId>
   <packaging>jar</packaging>
-  <version>1.0.0</version>
-  <name></name>
+  <version>1.0.0-tm-5+2</version>
+  <name>hdfs-webdav</name>
   <description></description>
   <url></url>
   
@@ -54,16 +54,20 @@
     <jdk.version>1.6</jdk.version>
     <hadoop.version>0.20-tm-5+2</hadoop.version>
     <jackrabbit.version>2.4.1</jackrabbit.version>
+    <jcr.version>2.0</jcr.version>
     <metrics.version>2.1.0</metrics.version>
     <commons-cli.version>1.2</commons-cli.version>
+    <commons-codec.version>1.4</commons-codec.version>
     <commons-logging.version>1.1.1</commons-logging.version>
     <guava.version>r09</guava.version>
-    <jetty.version>7.6.1.v20120215</jetty.version>
+    <jetty.version>6.1.26</jetty.version>
     <log4j.version>1.2.16</log4j.version>
     <slf4j.version>1.6.1</slf4j.version>
+    <junit.version>4.10</junit.version>
   </properties>
 
   <dependencies>
+
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
@@ -75,6 +79,11 @@
       <version>${commons-cli.version}</version>
     </dependency>
     <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+      <version>${commons-codec.version}</version>
+    </dependency>
+    <dependency>
       <groupId>commons-logging</groupId>
       <artifactId>commons-logging</artifactId>
       <version>${commons-logging.version}</version>
@@ -84,7 +93,6 @@
       <artifactId>log4j</artifactId>
       <version>${log4j.version}</version>
     </dependency>
-
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-core</artifactId>
@@ -120,26 +128,33 @@
         </exclusion>
       </exclusions>
     </dependency>
-
     <dependency>
-      <groupId>org.eclipse.jetty.aggregate</groupId>
-      <artifactId>jetty-all</artifactId>
+      <groupId>org.mortbay.jetty</groupId>
+      <artifactId>jetty</artifactId>
+      <version>${jetty.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.mortbay.jetty</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.mortbay.jetty</groupId>
+      <artifactId>jetty-util</artifactId>
       <version>${jetty.version}</version>
     </dependency>
-
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
       <version>${slf4j.version}</version>
     </dependency>
-
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-log4j12</artifactId>
       <version>${slf4j.version}</version>
       <scope>runtime</scope>
     </dependency>
-
     <dependency>
       <groupId>com.yammer.metrics</groupId>
       <artifactId>metrics-core</artifactId>
@@ -160,7 +175,11 @@
       <artifactId>metrics-ganglia</artifactId>
       <version>${metrics.version}</version>
     </dependency>
-
+    <dependency>
+      <groupId>javax.jcr</groupId>
+      <artifactId>jcr</artifactId>
+      <version>${jcr.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.jackrabbit</groupId>
       <artifactId>jackrabbit-webdav</artifactId>
@@ -170,6 +189,21 @@
       <groupId>org.apache.jackrabbit</groupId>
       <artifactId>jackrabbit-jcr-server</artifactId>
       <version>${jackrabbit.version}</version>
+    </dependency>
+
+    <!-- Test dependencies -->
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-test</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>test</scope>
     </dependency>
 
   </dependencies>
@@ -213,14 +247,17 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>2.12</version>
         <configuration>
+            <forkMode>always</forkMode>
             <forkedProcessTimeoutInSeconds>900</forkedProcessTimeoutInSeconds>
-            <!-- <argLine>-enableassertions</argLine> -->
-            <argLine>-Xmx1400m</argLine>
+            <argLine>-Xmx1g</argLine>
             <redirectTestOutputToFile>true</redirectTestOutputToFile>
             <includes>
                 <include>**/Test*.java</include>
                 <include>**/*Test.java</include>
             </includes>
+            <excludes>
+                <exclude>**/*$*</exclude>
+           </excludes>
         </configuration>
       </plugin>
 

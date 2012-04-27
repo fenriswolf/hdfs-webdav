@@ -35,16 +35,8 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
   /**
    * init param name of the repository prefix
    */
-  public static final String INIT_PARAM_RESOURCE_PATH_PREFIX = "resource-path-prefix";
-
-  /**
-   * Name of the optional init parameter that defines the value of the
-   * 'WWW-Authenticate' header.<p/>
-   * If the parameter is omitted the default value
-   * {@link #DEFAULT_AUTHENTICATE_HEADER "Basic Realm=Hadoop Webdav Server"}
-   * is used.
-   */
-  public static final String INIT_PARAM_AUTHENTICATE_HEADER = "authenticate-header";
+  public static final String INIT_PARAM_RESOURCE_PATH_PREFIX =
+    "resource-path-prefix";
 
   /**
    * Name of the init parameter that specify a separate configuration used
@@ -57,7 +49,8 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
   * having a static field with this servlet. The latter causes problems
   * when running multiple
   */
-  public static final String CTX_ATTR_RESOURCE_PATH_PREFIX = "hadoop.webdav.resourcepath";
+  public static final String CTX_ATTR_RESOURCE_PATH_PREFIX =
+    "hadoop.webdav.resourcepath";
 
   private static HDFSWebDAVServlet instance;
 
@@ -69,7 +62,6 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
   }
 
   private String resourcePathPrefix;
-  private String authenticateHeader;
   private DavResourceFactory resourceFactory;
   private DavLocatorFactory locatorFactory;
   private DavSessionProvider sessionProvider;
@@ -78,9 +70,11 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
 
   protected HDFSWebDAVServlet() { }
 
-  protected synchronized Configuration getConfiguration() {
+  public synchronized Configuration getConfiguration() {
     if (hadoopConf == null) {
       hadoopConf = new Configuration();
+      hadoopConf.addResource("webdav-default.xml");
+      hadoopConf.addResource("webdav-site.xml");
     }
     return hadoopConf;
   }
@@ -95,7 +89,14 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
   @Override
   protected boolean isPreconditionValid(WebdavRequest request,
       DavResource resource) {
-    return !resource.exists() || request.matchesIfHeader(resource);
+    try {
+      HDFSResource dfsResource = (HDFSResource)resource;
+      dfsResource.setProxyUser(request.getRemoteUser());
+      return !resource.exists() || request.matchesIfHeader(resource);
+    } catch (IOException e) {
+      LOG.warn("Exception in isPreconditionValid", e);
+      return false;
+    }
   }
 
   @Override
@@ -159,11 +160,6 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
     context.setAttribute(CTX_ATTR_RESOURCE_PATH_PREFIX, resourcePathPrefix);
     LOG.info(INIT_PARAM_RESOURCE_PATH_PREFIX + " is '" + resourcePathPrefix + "'");
 
-    authenticateHeader = getInitParameter(INIT_PARAM_AUTHENTICATE_HEADER);
-    if (authenticateHeader == null) {
-      authenticateHeader = DEFAULT_AUTHENTICATE_HEADER;
-    }
-
     String configParam = getInitParameter(INIT_PARAM_RESOURCE_CONFIG);
     if (configParam != null) try {
       getResourceConfig().parse(context.getResource(configParam));
@@ -178,7 +174,7 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
       DavException {
     HDFSResource dfsResource = (HDFSResource)resource;
     dfsResource.setProxyUser(request.getRemoteUser());
-    return super.execute(request, response, method, resource);
+    return super.execute(request, response, method, dfsResource);
   }
 
   @Override
@@ -191,16 +187,23 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
     try {
       super.service(request, response);
     } catch (Exception e) {
-      if (e.getCause() instanceof AccessControlException) {
+      if (e instanceof AccessControlException || 
+          e.getCause() instanceof AccessControlException) {
         LOG.info("Insufficient permissions for request for '" +
           request.getRequestURI() + "' from " + request.getRemoteUser() +
-          " at " + request.getRemoteAddr() + " authType " +
-          request.getAuthType());
-        MultiStatus ms = new MultiStatus();
-        ms.addResponse(
-          new MultiStatusResponse(request.getRequestURL().toString(), 401,
-            "You do not have permission to access this resource."));
-        new WebdavResponseImpl(response).sendMultiStatus(ms);
+          " at " + request.getRemoteAddr());
+        if (request.getMethod().equalsIgnoreCase("GET")) {
+          // Provide a plain 401 response for GETs
+          new WebdavResponseImpl(response)
+            .sendError(HttpServletResponse.SC_UNAUTHORIZED);
+        } else {
+          // Otherwise send a multistatus response
+          MultiStatus ms = new MultiStatus();
+          ms.addResponse(
+            new MultiStatusResponse(request.getRequestURL().toString(), 401,
+              "You do not have permission to access this resource."));
+          new WebdavResponseImpl(response).sendMultiStatus(ms);
+        }
       } else {
         LOG.warn("Exception processing request for '" +
           request.getRequestURI() + "' from " + request.getRemoteUser() +

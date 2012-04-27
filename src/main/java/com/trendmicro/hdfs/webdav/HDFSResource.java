@@ -66,7 +66,6 @@ public class HDFSResource implements DavResource {
   private DavResourceLocator locator;
   private DavSession session;
   private final Configuration conf;
-  private final FileSystem fs;
   private final Path path; //the path object that this resource represents
   private boolean isCollectionRequest = false;
   private UserGroupInformation user;
@@ -86,7 +85,6 @@ public class HDFSResource implements DavResource {
     this.locator = locator;
     this.session = session;
     this.conf = conf;
-    this.fs = FileSystem.get(conf);
     String pathStr = URLDecoder.decode(locator.getResourcePath());
     if (pathStr.trim().equals("")) { //empty path is not allowed
         pathStr = "/";
@@ -99,18 +97,22 @@ public class HDFSResource implements DavResource {
     return path;
   }
 
-  public void setProxyUser(String user) throws IOException {
-    this.user = UserGroupInformation.createProxyUser(user,
-      UserGroupInformation.getLoginUser());
+  public void setProxyUser(final String user) throws IOException {
+    if (user != null) {
+      this.user = UserGroupInformation.createProxyUser(user,
+        UserGroupInformation.getLoginUser());
+    } else {
+      this.user = UserGroupInformation.getCurrentUser();
+    }
   }
 
   @Override
-  public void addLockManager(LockManager lockManager) {
+  public void addLockManager(final LockManager lockManager) {
     this.lockManager = lockManager;
   }
 
   @Override
-  public void addMember(DavResource resource, InputContext context)
+  public void addMember(final DavResource resource, final InputContext context)
       throws DavException {
     // A PUT performed on an existing resource replaces the GET response entity
     // of the resource. Properties defined on the resource may be recomputed
@@ -123,57 +125,54 @@ public class HDFSResource implements DavResource {
           LOG.debug("Creating new directory '" +
             destPath.toUri().getPath() + "'");
         }
-        boolean success = user.doAs(
-          new PrivilegedExceptionAction<Boolean>() {
-            public Boolean run() throws Exception {
-              return fs.mkdirs(destPath);
-            }
-          });
+        boolean success = user.doAs(new PrivilegedExceptionAction<Boolean>() {
+          public Boolean run() throws Exception {
+            return FileSystem.get(conf).mkdirs(destPath);
+          }
+        });
         if (!success) {
-          throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+          throw new DavException(DavServletResponse.SC_CONFLICT);
         }
       } else {
         if (LOG.isDebugEnabled()) {
           LOG.debug("Creating new file '" + destPath.toUri().getPath() + "'");
         }
         if (!context.hasStream() || context.getContentLength() < 0) {
-          boolean success = user.doAs(
-            new PrivilegedExceptionAction<Boolean>() {
-              public Boolean run() throws Exception {
-                return fs.createNewFile(destPath);
-              }
-            });
+          boolean success = user.doAs(new PrivilegedExceptionAction<Boolean>() {
+            public Boolean run() throws Exception {
+              return FileSystem.get(conf).createNewFile(destPath);
+            }
+          });
           if (!success) {
             throw new DavException(DavServletResponse.SC_CONFLICT);
           }
         } else {
-          OutputStream out = user.doAs(
-            new PrivilegedExceptionAction<OutputStream>() {
-              public OutputStream run() throws Exception {
-                return fs.create(destPath);
-              }
-            });
-          InputStream in = context.getInputStream();
-          IOUtils.copyBytes(in, out, conf, true);
+          user.doAs(new PrivilegedExceptionAction<Void>() {
+            public Void run() throws Exception {
+              OutputStream out = FileSystem.get(conf).create(destPath);
+              InputStream in = context.getInputStream();
+              IOUtils.copyBytes(in, out, conf, true);
+              return null;
+            }
+          });
         }
       }
     } catch (IOException e) {
-      LOG.warn("Exception creating new resource '" + destPath + "'", e);
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
     } catch (InterruptedException e) {
-      LOG.warn("Interrupted while creating new resource '" + destPath + "'", e);
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
     }
   }
 
   @Override
-  public MultiStatusResponse alterProperties(List<? extends PropEntry> props)
+  public MultiStatusResponse alterProperties(final List<? extends PropEntry> props)
       throws DavException {
     return null;
   }
 
   @Override
-  public void copy(DavResource resource, boolean shallow) throws DavException {
+  public void copy(final DavResource resource, final boolean shallow)
+      throws DavException {
     if (!exists()) {
       throw new DavException(DavServletResponse.SC_NOT_FOUND);
     }
@@ -185,20 +184,17 @@ public class HDFSResource implements DavResource {
           destPath.toUri().getPath() + "'");
       }
       try {
-        user.doAs(
-          new PrivilegedExceptionAction<Void>() {
-            public Void run() throws Exception {
-              FileUtil.copy(fs, path, fs, destPath, false, conf);
-              return null;
-            }
-          });
+        user.doAs(new PrivilegedExceptionAction<Void>() {
+          public Void run() throws Exception {
+            FileSystem fs = FileSystem.get(conf);
+            FileUtil.copy(fs, path, fs, destPath, false, conf);
+            return null;
+          }
+        });
       } catch (IOException e) {
-        LOG.warn("Exception copying '" + path + "' to '" + destPath + "'", e);
-        throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+        throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
       } catch (InterruptedException e) {
-        LOG.warn("Interrupted while copying '" + path + "' to '" + destPath +
-          "'", e);
-        throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+        throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
       }
     }
     // TODO: Currently no support for shallow copy; however, this is
@@ -210,17 +206,14 @@ public class HDFSResource implements DavResource {
   @Override
   public boolean exists() {
     try {
-      return user.doAs(
-        new PrivilegedExceptionAction<Boolean>() {
-          public Boolean run() throws Exception {
-            return fs.exists(path);
-          }            
-        });
+      return user.doAs(new PrivilegedExceptionAction<Boolean>() {
+        public Boolean run() throws Exception {
+          return FileSystem.get(conf).exists(path);
+        }            
+      });
     } catch (IOException e) {
-      LOG.warn("Exception testing existence of '" + path + "'", e);
       throw new RuntimeException(e);
     } catch (InterruptedException e) {
-      LOG.warn("Interrupted while testing existence of '" + path + "'", e);
       throw new RuntimeException(e);
     }
   }
@@ -236,7 +229,6 @@ public class HDFSResource implements DavResource {
     try {
       return factory.createResource(newLocator, getSession());
     } catch (DavException e) {
-      LOG.warn(StringUtils.stringifyException(e));
       throw new RuntimeException(e);
     }
   }
@@ -277,7 +269,7 @@ public class HDFSResource implements DavResource {
   }
 
   @Override
-  public ActiveLock getLock(Type type, Scope scope) {
+  public ActiveLock getLock(final Type type, final Scope scope) {
     return lockManager.getLock(type, scope, this);
   }
 
@@ -290,12 +282,11 @@ public class HDFSResource implements DavResource {
   public DavResourceIterator getMembers() {
     List<DavResource> list = new ArrayList<DavResource>();
     try {
-      FileStatus[] stat = user.doAs(
-        new PrivilegedExceptionAction<FileStatus[]>() {
-          public FileStatus[] run() throws Exception {
-            return fs.listStatus(path);
-          }
-        });
+      FileStatus[] stat = user.doAs(new PrivilegedExceptionAction<FileStatus[]>() {
+        public FileStatus[] run() throws Exception {
+          return FileSystem.get(conf).listStatus(path);
+        }
+      });
       if (stat != null) {
         for (FileStatus s: stat) {
           Path p = s.getPath();
@@ -311,10 +302,8 @@ public class HDFSResource implements DavResource {
         }
       }
     } catch (IOException e) {
-      LOG.warn(StringUtils.stringifyException(e));
       throw new RuntimeException(e);
     } catch (InterruptedException e) {
-      LOG.warn(StringUtils.stringifyException(e));
       throw new RuntimeException(e);
     }
     return new DavResourceIteratorImpl(list);
@@ -325,14 +314,12 @@ public class HDFSResource implements DavResource {
     try {
       return user.doAs(new PrivilegedExceptionAction<Long>() {
         public Long run() throws Exception {
-          return fs.getFileStatus(path).getModificationTime();
+          return FileSystem.get(conf).getFileStatus(path).getModificationTime();
         }
       });
     } catch (IOException e) {
-      LOG.warn(StringUtils.stringifyException(e));
       throw new RuntimeException(e);
     } catch (InterruptedException e) {
-      LOG.warn(StringUtils.stringifyException(e));
       throw new RuntimeException(e);
     }
   }
@@ -343,12 +330,11 @@ public class HDFSResource implements DavResource {
       return;
     }
     try {
-      FileStatus stat = user.doAs(
-        new PrivilegedExceptionAction<FileStatus>() {
-          public FileStatus run() throws Exception {
-            return fs.getFileStatus(getPath());
-          }
-        });
+      FileStatus stat = user.doAs(new PrivilegedExceptionAction<FileStatus>() {
+        public FileStatus run() throws Exception {
+          return FileSystem.get(conf).getFileStatus(getPath());
+        }
+      });
       properties.add(new DefaultDavProperty(DavPropertyName.GETCONTENTLENGTH,
         stat.getLen()));
       SimpleDateFormat simpleFormat =
@@ -393,7 +379,7 @@ public class HDFSResource implements DavResource {
   }
 
   @Override
-  public DavProperty<?> getProperty(DavPropertyName name) {
+  public DavProperty<?> getProperty(final DavPropertyName name) {
     synchronized (this) {
       if (properties == null) {
         populateProperties();
@@ -428,37 +414,35 @@ public class HDFSResource implements DavResource {
   }
 
   @Override
-  public boolean hasLock(Type type, Scope scope) {
+  public boolean hasLock(final Type type, final Scope scope) {
     return false;
   }
 
   @Override
   public boolean isCollection() {
     try {
-      return user.doAs(
-        new PrivilegedExceptionAction<Boolean>() {
-          public Boolean run() throws Exception {
-            return fs.getFileStatus(path).isDir();
-          }
-        });
+      return user.doAs(new PrivilegedExceptionAction<Boolean>() {
+        public Boolean run() throws Exception {
+          return FileSystem.get(conf).getFileStatus(path).isDir();
+        }
+      });
     } catch (Exception e) {
-      LOG.warn(StringUtils.stringifyException(e));
       return false;
     }
   }
 
   @Override
-  public boolean isLockable(Type type, Scope scope) {
+  public boolean isLockable(final Type type, final Scope scope) {
     return false;
   }
 
   @Override
-  public ActiveLock lock(LockInfo reqLockInfo) throws DavException {
+  public ActiveLock lock(final LockInfo reqLockInfo) throws DavException {
     return lockManager.createLock(reqLockInfo, this);
   }
 
   @Override
-  public void move(DavResource resource) throws DavException {
+  public void move(final DavResource resource) throws DavException {
     final HDFSResource dfsResource = (HDFSResource)resource;
     final Path destPath = dfsResource.getPath();
     if (LOG.isDebugEnabled()) {
@@ -466,57 +450,50 @@ public class HDFSResource implements DavResource {
         destPath.toUri().getPath() + "'");
     }
     try {
-      user.doAs(
-        new PrivilegedExceptionAction<Void>() {
-          public Void run() throws Exception {
-            fs.rename(path, destPath);
-            return null;
-          }
-        });
+      user.doAs(new PrivilegedExceptionAction<Void>() {
+        public Void run() throws Exception {
+          FileSystem.get(conf).rename(path, destPath);
+          return null;
+        }
+      });
     } catch (IOException e) {
-      LOG.warn("Exception moving '" + path + "' to '" + destPath + "'", e);
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
     } catch (InterruptedException e) {
-      LOG.warn("Interrupted while moving '" + path + "' to '" + destPath +
-        "'", e);
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
     }
   }
 
   @Override
-  public ActiveLock refreshLock(LockInfo reqLockInfo, String lockToken)
-      throws DavException {
+  public ActiveLock refreshLock(final LockInfo reqLockInfo,
+      final String lockToken) throws DavException {
     return lockManager.refreshLock(reqLockInfo, lockToken, this);
   }
 
   @Override
-  public void removeMember(DavResource resource) throws DavException {
+  public void removeMember(final DavResource resource) throws DavException {
     final HDFSResource dfsResource = (HDFSResource)resource;
     final Path destPath = dfsResource.getPath();
     try {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Deleting '" + destPath.toUri().getPath() + "'");
       }
-      boolean success = user.doAs(
-        new PrivilegedExceptionAction<Boolean>() {
-          public Boolean run() throws Exception {
-            return fs.delete(destPath, true);
-          }
-        });
+      boolean success = user.doAs(new PrivilegedExceptionAction<Boolean>() {
+        public Boolean run() throws Exception {
+          return FileSystem.get(conf).delete(destPath, true);
+        }
+      });
       if (!success) {
         throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
       }
     } catch (IOException e) {
-      LOG.warn("Exception deleting resource '" + destPath + "'", e);
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
     } catch (InterruptedException e) {
-      LOG.warn("Interrupted while deleting resource '" + destPath + "'", e);
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
+      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
     }
   }
 
   @Override
-  public void removeProperty(DavPropertyName name) throws DavException {
+  public void removeProperty(final DavPropertyName name) throws DavException {
     synchronized (this) {
       if (properties == null) {
         populateProperties();
@@ -526,7 +503,7 @@ public class HDFSResource implements DavResource {
   }
 
   @Override
-  public void setProperty(DavProperty<?> property) throws DavException {
+  public void setProperty(final DavProperty<?> property) throws DavException {
     synchronized (this) {
       if (properties == null) {
         populateProperties();
@@ -536,31 +513,25 @@ public class HDFSResource implements DavResource {
   }
 
   @Override
-  public void spool(OutputContext context) throws IOException {
+  public void spool(final OutputContext context) throws IOException {
     if (!isCollection()) try {
-      InputStream input = user.doAs(
-        new PrivilegedExceptionAction<InputStream>() {
-          public InputStream run() throws Exception {
-            return fs.open(path);
+      user.doAs(new PrivilegedExceptionAction<Void>() {
+        public Void run() throws Exception {
+          InputStream input = FileSystem.get(conf).open(path);
+          try {
+            IOUtils.copyBytes(input, context.getOutputStream(), conf, false);
+          } finally {
+            input.close();
           }
+          return null;
+        }
       });
-      try {
-        IOUtils.copyBytes(input, context.getOutputStream(), conf, false);
-      } finally {
-        input.close();
-      }
-    } catch (IOException e) {
-      LOG.warn("Exception spooling resource '" + path.toUri().getPath() +
-        "'", e);
-      throw e;
     } catch (InterruptedException e) {
-      LOG.warn("Interrupted spooling resource '" + path.toUri().getPath() +
-        "'", e);
       throw new IOException(e);
     }
   }
 
   @Override
-  public void unlock(String lockToken) throws DavException { }
+  public void unlock(final String lockToken) throws DavException { }
 
 }

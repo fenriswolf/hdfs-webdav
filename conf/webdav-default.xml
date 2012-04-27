@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+
+<property>
+  <name>hadoop.webdav.bind.address</name>
+  <value>0.0.0.0</value>
+  <description>The address or hostname for binding the webdav service
+  listener.
+  </description>
+</property>
+
+<property>
+  <name>hadoop.webdav.port</name>
+  <value>8080</value>
+  <description>The port for binding the webdav service listener.
+  </description>
+</property>
+
+<property>
+  <name>hadoop.webdav.server.kerberos.principal</name>
+  <value>webdav/_HOST@HADOOP.LOCALDOMAIN</value>
+  <description>The Kerberos principal used by WebDAV for accessing HDFS. This
+  user should be set up for secure impersonation.
+  </description>
+</property>
+
+<property>
+  <name>hadoop.webdav.server.kerberos.keytab</name>
+  <value></value>
+  <description>The Kerberos keytab file with the credentials for the principal
+  used by WebDAV for accessing HDFS.</description>
+</property>
+
+<property>
+  <name>hadoop.webdav.authentication.type</name>
+  <value>simple</value>
+  <description>Possible values are simple (no authentication), and kerberos
+  </description>
+</property>
+
+<property>
+  <name>hadoop.webdav.authentication.simple.anonymous.allowed</name>
+  <value>true</value>
+  <description>Set to true if anonymous requests should be allowed when
+  simple authentication is in effect.
+  </description>
+</property>
+
+<property>
+  <name>hadoop.webdav.authentication.kerberos.principal</name>
+  <value>HTTP/_HOST@HADOOP.LOCALDOMAIN</value>
+  <description>The HTTP Kerberos principal used by WebDAV in the HTTP endpoint.
+  The HTTP Kerberos principal MUST start with 'HTTP/' per the Kerberos HTTP
+  SPNEGO specification. 
+  </description>
+</property>
+
+<property>
+  <name>hadoop.webdav.authentication.kerberos.keytab</name>
+  <value></value>
+  <description>The Kerberos keytab file with the credentials for the HTTP
+  Kerberos principal used for the HTTP endpoint. 
+  </description>
+</property>
+
+</configuration>

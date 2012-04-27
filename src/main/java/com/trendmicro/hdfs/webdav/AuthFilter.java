@@ -10,7 +10,7 @@ import org.apache.hadoop.security.authentication.server.AuthenticationFilter;
 
 public class AuthFilter extends AuthenticationFilter {
 
-  private static final String CONF_PREFIX = "webdav.authentication.";
+  private static final String CONF_PREFIX = "hadoop.webdav.authentication.";
   private Configuration conf;
 
   public AuthFilter(Configuration conf) {
