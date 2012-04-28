@@ -12,6 +12,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.AccessControlException;
+import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.DavLocatorFactory;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
@@ -92,8 +93,19 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
       dfsResource.setProxyUser(request.getRemoteUser());
       return !resource.exists() || request.matchesIfHeader(resource);
     } catch (IOException e) {
-      LOG.warn("Exception in isPreconditionValid", e);
-      return false;
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  protected int validateDestination(DavResource resource, WebdavRequest request,
+      boolean overwrite) throws DavException {
+    try {
+      HDFSResource dfsResource = (HDFSResource)resource;
+      dfsResource.setProxyUser(request.getRemoteUser());
+      return super.validateDestination(dfsResource, request, overwrite);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
   }
 

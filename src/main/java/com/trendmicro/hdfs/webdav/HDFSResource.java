@@ -198,6 +198,7 @@ public class HDFSResource implements DavResource {
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
+      return;
     }
     // TODO: Currently no support for shallow copy; however, this is
     // only relevant if the source resource is a collection
