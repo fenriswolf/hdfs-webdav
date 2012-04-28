@@ -12,7 +12,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.AccessControlException;
-import org.apache.jackrabbit.webdav.DavException;
 import org.apache.jackrabbit.webdav.DavLocatorFactory;
 import org.apache.jackrabbit.webdav.DavResource;
 import org.apache.jackrabbit.webdav.DavResourceFactory;
@@ -20,7 +19,6 @@ import org.apache.jackrabbit.webdav.DavSessionProvider;
 import org.apache.jackrabbit.webdav.MultiStatus;
 import org.apache.jackrabbit.webdav.MultiStatusResponse;
 import org.apache.jackrabbit.webdav.WebdavRequest;
-import org.apache.jackrabbit.webdav.WebdavResponse;
 import org.apache.jackrabbit.webdav.WebdavResponseImpl;
 import org.apache.jackrabbit.webdav.server.AbstractWebdavServlet;
 import org.apache.jackrabbit.webdav.simple.LocatorFactoryImpl;
@@ -166,15 +164,6 @@ public class HDFSWebDAVServlet extends AbstractWebdavServlet {
     } catch (MalformedURLException e) {
       LOG.debug("Unable to build resource filter provider");
     }
-  }
-
-  @Override
-  protected boolean execute(WebdavRequest request, WebdavResponse response,
-      int method, DavResource resource) throws ServletException, IOException,
-      DavException {
-    HDFSResource dfsResource = (HDFSResource)resource;
-    dfsResource.setProxyUser(request.getRemoteUser());
-    return super.execute(request, response, method, dfsResource);
   }
 
   @Override

@@ -54,32 +54,29 @@ public class TestGetSimple {
     minicluster.startMiniCluster(gatewayUser);
     LOG.info("Gateway started on port " + minicluster.getGatewayPort());
 
-    UserGroupInformation.getCurrentUser().doAs(
-      new PrivilegedExceptionAction<Void>() {
-        public Void run() throws Exception {
-          FileSystem fs = minicluster.getTestFileSystem();
-          Path path = new Path("/test");
-          fs.mkdirs(path,
-            new FsPermission(FsAction.ALL, FsAction.READ_EXECUTE,
-              FsAction.NONE));
-          fs.setOwner(path, ownerUser.getShortUserName(),
-            ownerUser.getGroupNames()[0]);
-          return null;
-        }
-      });
+    FsPermission.setUMask(conf, new FsPermission((short)0));
+
+    FileSystem fs = minicluster.getTestFileSystem();
+    Path path = new Path("/test");
+    assertTrue(fs.mkdirs(path,
+      new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL)));
+    fs.setOwner(path, ownerUser.getShortUserName(),
+      ownerUser.getGroupNames()[0]);
 
     ownerUser.doAs(new PrivilegedExceptionAction<Void>() {
       public Void run() throws Exception {
         FileSystem fs = minicluster.getTestFileSystem();
         FSDataOutputStream os;
         os = fs.create(new Path("/test/pubdata"),
-            new FsPermission(FsAction.ALL, FsAction.READ, FsAction.NONE),
-            true, 4096, (short)1, 65536, null);
+          new FsPermission(FsAction.ALL, FsAction.READ, FsAction.NONE),
+          true, 4096, (short)1, 65536, null);
+        assertNotNull(os);
         os.write(testPublicData.getBytes());
         os.close();
         os = fs.create(new Path("/test/privdata"),
-            new FsPermission(FsAction.ALL, FsAction.NONE, FsAction.NONE),
-            true, 4096, (short)1, 65536, null);
+          new FsPermission(FsAction.ALL, FsAction.NONE, FsAction.NONE),
+          true, 4096, (short)1, 65536, null);
+        assertNotNull(os);
         os.write(testPrivateData.getBytes());
         os.close();
         return null;
@@ -94,9 +91,9 @@ public class TestGetSimple {
 
   @Test
   public void testGetAnonymousPublic() {
+    GetMethod get = new GetMethod("http://localhost:" +
+      minicluster.getGatewayPort() + "/test/pubdata");
     try {
-      GetMethod get = new GetMethod("http://localhost:" +
-        minicluster.getGatewayPort() + "/test/pubdata");
       int code = minicluster.getClient().executeMethod(get);
       assertEquals("Expected 200 response, got " + code, 200, code);
       String data = get.getResponseBodyAsString();
@@ -105,28 +102,32 @@ public class TestGetSimple {
     } catch (IOException e) {
       LOG.error("Get failed", e);
       fail("Get failed with an exception");
+    } finally {
+      get.releaseConnection();
     }
   }
 
   @Test
   public void testGetAnonymousPrivate() {
+    GetMethod get = new GetMethod("http://localhost:" +
+      minicluster.getGatewayPort() + "/test/privdata");
     try {
-      GetMethod get = new GetMethod("http://localhost:" +
-        minicluster.getGatewayPort() + "/test/privdata");
       int code = minicluster.getClient().executeMethod(get);
       assertEquals("Expected 401 response, got " + code, 401, code);
     } catch (IOException e) {
       LOG.error("Get failed", e);
       fail("Get failed with an exception");
+    } finally {
+      get.releaseConnection();
     }
   }
 
   @Test
   public void testGetOwnerPrivate() {
+    GetMethod get = new GetMethod("http://localhost:" +
+      minicluster.getGatewayPort() + "/test/privdata?user.name=" +
+      ownerUser.getShortUserName());
     try {
-      GetMethod get = new GetMethod("http://localhost:" +
-        minicluster.getGatewayPort() + "/test/privdata?user.name=" +
-        ownerUser.getShortUserName());
       int code = minicluster.getClient().executeMethod(get);
       assertEquals("Expected 200 response, got " + code, 200, code);
       String data = get.getResponseBodyAsString();
@@ -135,6 +136,8 @@ public class TestGetSimple {
     } catch (IOException e) {
       LOG.error("Get failed", e);
       fail("Get failed with an exception");
+    } finally {
+      get.releaseConnection();
     }
   }
 

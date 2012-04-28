@@ -85,6 +85,7 @@ public class HDFSResource implements DavResource {
     this.locator = locator;
     this.session = session;
     this.conf = conf;
+    @SuppressWarnings("deprecation")
     String pathStr = URLDecoder.decode(locator.getResourcePath());
     if (pathStr.trim().equals("")) { //empty path is not allowed
         pathStr = "/";
@@ -101,7 +102,8 @@ public class HDFSResource implements DavResource {
     if (user != null) {
       this.user = UserGroupInformation.createProxyUser(user,
         UserGroupInformation.getLoginUser());
-    } else {
+    }
+    if (this.user == null) {
       this.user = UserGroupInformation.getCurrentUser();
     }
   }
@@ -158,9 +160,9 @@ public class HDFSResource implements DavResource {
         }
       }
     } catch (IOException e) {
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+      throw new RuntimeException(e);
     } catch (InterruptedException e) {
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -192,9 +194,9 @@ public class HDFSResource implements DavResource {
           }
         });
       } catch (IOException e) {
-        throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+        throw new RuntimeException(e);
       } catch (InterruptedException e) {
-        throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+        throw new RuntimeException(e);
       }
     }
     // TODO: Currently no support for shallow copy; however, this is
@@ -206,6 +208,9 @@ public class HDFSResource implements DavResource {
   @Override
   public boolean exists() {
     try {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Testing existence of '" + path + "'");
+      }
       return user.doAs(new PrivilegedExceptionAction<Boolean>() {
         public Boolean run() throws Exception {
           return FileSystem.get(conf).exists(path);
@@ -227,7 +232,10 @@ public class HDFSResource implements DavResource {
       locator.getFactory().createResourceLocator(locator.getPrefix(),
         path.getParent().toUri().getPath());
     try {
-      return factory.createResource(newLocator, getSession());
+      HDFSResource resource = (HDFSResource)
+        factory.createResource(newLocator, getSession());
+      resource.user = this.user;
+      return resource;
     } catch (DavException e) {
       throw new RuntimeException(e);
     }
@@ -294,7 +302,10 @@ public class HDFSResource implements DavResource {
             locator.getFactory().createResourceLocator(locator.getPrefix(),
               locator.getWorkspacePath(), p.toString(), false);
           try {
-            list.add(factory.createResource(resourceLocator, getSession()));
+            HDFSResource resource = (HDFSResource)
+              factory.createResource(resourceLocator, getSession());
+            resource.user = this.user;
+            list.add(resource);
           } catch (DavException ex) {
             LOG.warn("Exception adding resource '" + p.toUri().getPath() +
               "' to iterator");
@@ -426,8 +437,10 @@ public class HDFSResource implements DavResource {
           return FileSystem.get(conf).getFileStatus(path).isDir();
         }
       });
-    } catch (Exception e) {
-      return false;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -457,9 +470,9 @@ public class HDFSResource implements DavResource {
         }
       });
     } catch (IOException e) {
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+      throw new RuntimeException(e);
     } catch (InterruptedException e) {
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -486,9 +499,9 @@ public class HDFSResource implements DavResource {
         throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR);
       }
     } catch (IOException e) {
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+      throw new RuntimeException(e);
     } catch (InterruptedException e) {
-      throw new DavException(DavServletResponse.SC_INTERNAL_SERVER_ERROR, e);
+      throw new RuntimeException(e);
     }
   }
 
