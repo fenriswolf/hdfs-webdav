@@ -1,3 +1,21 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.trendmicro.hdfs.webdav.test;
 
 import static org.junit.Assert.*;
@@ -5,6 +23,7 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 
+import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -26,6 +45,8 @@ import org.junit.Test;
 public class TestPutSimple {
 
   private static final Log LOG = LogFactory.getLog(TestPutSimple.class);
+
+  private static final String testData = "This is a put test!";
 
   private static MiniClusterTestUtil minicluster = new MiniClusterTestUtil();
   private static UserGroupInformation ownerUser = 
@@ -84,9 +105,9 @@ public class TestPutSimple {
   @Test
   public void testPutOwner() {
     PutMethod put = new PutMethod("http://localhost:" +
-      minicluster.getGatewayPort() + "/test/rw/file2?user.name=" +
+      minicluster.getGatewayPort() + "/test/rw/file1?user.name=" +
       ownerUser.getShortUserName());
-    put.setRequestBody("This is a test!");
+    put.setRequestBody(testData);
     try {
       int code = minicluster.getClient().executeMethod(put);
       assertEquals("Expected 201 response, got " + code, 201, code);
@@ -95,7 +116,23 @@ public class TestPutSimple {
       fail("Put failed with an exception");
     } finally {
       put.releaseConnection();
-    }    
+    }
+    // Check the result
+    GetMethod get = new GetMethod("http://localhost:" +
+      minicluster.getGatewayPort() + "/test/rw/file1?user.name=" +
+      ownerUser.getShortUserName());
+    try {
+      int code = minicluster.getClient().executeMethod(get);
+      assertEquals("Expected 200 response, got " + code, 200, code);
+      String data = get.getResponseBodyAsString();
+      assertEquals("Response body was not as expected, wanted '" +
+        testData + "', got '" + data + "'", testData, data);
+    } catch (IOException e) {
+      LOG.error("Get failed", e);
+      fail("Get failed with an exception");      
+    } finally {
+      get.releaseConnection();
+    }
   }
 
   @Test
@@ -103,7 +140,7 @@ public class TestPutSimple {
     PutMethod put = new PutMethod("http://localhost:" +
       minicluster.getGatewayPort() + "/test/ro/file2?user.name=" +
       ownerUser.getShortUserName());
-    put.setRequestBody("This is a test!");
+    put.setRequestBody(testData);
     try {
       try {
         int code = minicluster.getClient().executeMethod(put);
@@ -132,8 +169,8 @@ public class TestPutSimple {
   @Test
   public void testPutAnonymousPublic() {
     PutMethod put = new PutMethod("http://localhost:" +
-      minicluster.getGatewayPort() + "/test/public/file1");
-    put.setRequestBody("This is a test!");
+      minicluster.getGatewayPort() + "/test/public/file3");
+    put.setRequestBody(testData);
     try {
       int code = minicluster.getClient().executeMethod(put);
       assertEquals("Expected 201 response, got " + code, 201, code);
@@ -143,13 +180,28 @@ public class TestPutSimple {
     } finally {
       put.releaseConnection();
     }    
+    // Check the result
+    GetMethod get = new GetMethod("http://localhost:" +
+      minicluster.getGatewayPort() + "/test/public/file3");
+    try {
+      int code = minicluster.getClient().executeMethod(get);
+      assertEquals("Expected 200 response, got " + code, 200, code);
+      String data = get.getResponseBodyAsString();
+      assertEquals("Response body was not as expected, wanted '" +
+        testData + "', got '" + data + "'", testData, data);
+    } catch (IOException e) {
+      LOG.error("Get failed", e);
+      fail("Get failed with an exception");      
+    } finally {
+      get.releaseConnection();
+    }
   }
 
   @Test
   public void testPutAnonymousReadOnly() {
     PutMethod put = new PutMethod("http://localhost:" +
-      minicluster.getGatewayPort() + "/test/ro/file1");
-    put.setRequestBody("This is a test!");
+      minicluster.getGatewayPort() + "/test/ro/file4");
+    put.setRequestBody(testData);
     try {
       try {
         int code = minicluster.getClient().executeMethod(put);
