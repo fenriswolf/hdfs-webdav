@@ -63,6 +63,8 @@ To deploy:
     &lt;/property&gt;
     </pre>
 
+    NOTE: Allowing 'simple' authentication is a huge security hole if user impersonation is also allowed. If running with 'simple' authentication in production, REVERT the changes made in step 3, and carefully restrict the HDFS permissions of data so the 'webdav' principal has read-write access only in controlled locations.
+
     For authenticating both the WebDAV gateway _and_ clients (via SPNEGO):
 
     <pre>
