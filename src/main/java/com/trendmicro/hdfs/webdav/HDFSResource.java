@@ -359,12 +359,20 @@ public class HDFSResource implements DavResource {
     if (properties != null) {
       return;
     }
+    properties = new DavPropertySet();
+    FileStatus stat = null;
     try {
-      FileStatus stat = user.doAs(new PrivilegedExceptionAction<FileStatus>() {
+      stat = user.doAs(new PrivilegedExceptionAction<FileStatus>() {
         public FileStatus run() throws Exception {
           return FileSystem.get(conf).getFileStatus(getPath());
         }
       });
+    } catch (IOException ex) {
+      LOG.warn(StringUtils.stringifyException(ex));
+    } catch (InterruptedException e) {
+      LOG.warn(StringUtils.stringifyException(e));
+    }
+    if (stat != null) {
       properties.add(new DefaultDavProperty(DavPropertyName.GETCONTENTLENGTH,
         stat.getLen()));
       SimpleDateFormat simpleFormat =
@@ -378,10 +386,6 @@ public class HDFSResource implements DavResource {
       properties.add(new DefaultDavProperty(SecurityConstants.GROUP,
         stat.getGroup()));
       // TODO: Populate DAV property SecurityConstants.CURRENT_USER_PRIVILEGE_SET
-    } catch (IOException ex) {
-      LOG.warn(StringUtils.stringifyException(ex));
-    } catch (InterruptedException e) {
-      LOG.warn(StringUtils.stringifyException(e));
     }
     if (getDisplayName() != null) {
       properties.add(new DefaultDavProperty(DavPropertyName.DISPLAYNAME,
