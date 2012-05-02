@@ -121,8 +121,8 @@ public class Main {
     UserGroupInformation.setConfiguration(conf);
     if (UserGroupInformation.isSecurityEnabled()) try {
       SecurityUtil.login(conf,
-        conf.get("hadoop.webdav.server.kerberos.keytab"),
-        conf.get("hadoop.webdav.server.kerberos.principal"),
+        "hadoop.webdav.server.kerberos.keytab",
+        "hadoop.webdav.server.kerberos.principal",
         addr.getHostName());
     } catch (IOException e) {
       LOG.fatal("Could not log in", e);
