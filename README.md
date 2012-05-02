@@ -34,6 +34,37 @@ To deploy:
 
 6. Edit the webdav-site.xml file in its conf/ directory as needed:
 
+    For authenticating the WebDAV gateway securely with Kerberos on a security-enabled Hadoop cluser but allowing clients anonymous access:
+
+    <pre>
+    &lt;property&gt;
+        &lt;name&gt;hadoop.webdav.bind.address&lt;/name&gt;
+        &lt;value&gt;0.0.0.0&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;hadoop.webdav.port&lt;/name&gt;
+        &lt;value&gt;8080&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;hadoop.webdav.server.kerberos.principal&lt;/name&gt;
+        &lt;value&gt;webdav/_HOST@HADOOP.LOCALDOMAIN&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;hadoop.webdav.server.kerberos.keytab&lt;/name&gt;
+        &lt;value&gt;/path/to/webdav.keytab&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;hadoop.webdav.authentication.type&lt;/name&gt;
+        &lt;value&gt;simple&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;property&gt;
+        &lt;name&gt;hadoop.webdav.authentication.simple.anonymous.allowed&lt;/name&gt;
+        &lt;value&gt;true&lt;/value&gt;
+    &lt;/property&gt;
+    </pre>
+
+    For authenticating both the WebDAV gateway _and_ clients (via SPNEGO):
+
     <pre>
     &lt;property&gt;
         &lt;name&gt;hadoop.webdav.bind.address&lt;/name&gt;
@@ -65,7 +96,7 @@ To deploy:
     &lt;/property&gt;
     </pre>
 
-This is a configuration for a secure cluster. Given this example, if the KDC is running and per host principals for 'webdav' and 'HTTP' were added to the local keytab, then you should see something like the below logged at startup:
+    This is a configuration for a secure cluster. Given this example, if the KDC is running and per host principals for 'webdav' and 'HTTP' were added to the local keytab, then you should see something like the below logged at startup:
 
     <pre>
     12/05/02 14:53:52 INFO security.UserGroupInformation: Login successful for user webdav/ip-10-177-2-205.us-west-1.compute.internal@HADOOP.LOCALDOMAIN using keytab file /etc/hadoop/conf/hdfs.keytab
@@ -75,4 +106,8 @@ This is a configuration for a secure cluster. Given this example, if the KDC is 
     12/05/02 14:53:52 INFO mortbay.log: Started SelectChannelConnector@0.0.0.0:8080
     </pre>
 
-If instead you are running on some test cluster that does not have security enabled, check out the settings in conf/webdav-default.xml. The default authentication type is "simple" and anonymous access is allowed. If you want to run this way, then just don't override those config properties (you can probably just skip creation of a webdav-site.xml file).
+To test if a client can fetch from the WebDAV server running in a secure configuration, you can use a version of 'curl' that has support for GSS-Negotiate (check with curl -V):
+
+    $ kinit
+    ( Log in. )
+    $ curl --negotiate -u $USER -b ~/cookiejar.txt -c ~/cookiejar.txt http://$HOST:8080/$PATH
