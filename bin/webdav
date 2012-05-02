@@ -123,4 +123,14 @@ if [ "x$JAVA_LIBRARY_PATH" != "x" ]; then
   WEBDAV_OPTS="$WEBDAV_OPTS -Djava.library.path=$JAVA_LIBRARY_PATH"
 fi  
 
-exec $JAVA $JAVA_HEAP_MAX $WEBDAV_OPTS -classpath "$CLASSPATH" com.trendmicro.hdfs.webdav.Main "$@"
+WEBDAV_OPTS="$WEBDAV_OPTS -Djavax.security.auth.useSubjectCredsOnly=false"
+
+if [ "$COMMAND" = "webdav" ] ; then
+  CLASS="com.trendmicro.hdfs.webdav.Main"
+elif [ "$COMMAND" = "get" ] ; then
+  CLASS="com.trendmicro.hdfs.webdav.tool.Get"
+else
+  CLASS="com.trendmicro.hdfs.webdav.Main"
+fi
+
+exec $JAVA $JAVA_HEAP_MAX $WEBDAV_OPTS -classpath "$CLASSPATH" $CLASS "$@"
