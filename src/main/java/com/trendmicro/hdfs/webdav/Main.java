@@ -156,7 +156,7 @@ public class Main {
     context.addFilter(new FilterHolder(new DefaultWebappMetricsFilter()),
       "/*", 0);
         // auth filter
-    context.addFilter(new FilterHolder(new AuthFilter(conf)), "/*", 0);
+    //context.addFilter(new FilterHolder(new AuthFilter(conf)), "/*", 0);
     server.setHandler(context);
 
     // Set up Ganglia metrics reporting
