@@ -9,21 +9,26 @@
   <formats>
     <format>tar.gz</format>
   </formats>
+  <baseDirectory>${name}</baseDirectory>
   <fileSets>
+    <!--
     <fileSet>
       <includes>
         <include>pom.xml</include>
       </includes>
     </fileSet>
+    -->
     <fileSet>
       <directory>bin</directory>
     </fileSet>
     <fileSet>
       <directory>conf</directory>
     </fileSet>
+    <!--
     <fileSet>
       <directory>src</directory>
     </fileSet>
+    -->
     <fileSet>
       <directory>target</directory>
       <outputDirectory>/</outputDirectory>
