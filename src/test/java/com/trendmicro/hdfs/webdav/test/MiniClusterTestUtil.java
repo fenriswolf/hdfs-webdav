@@ -45,7 +45,6 @@ import org.mortbay.jetty.servlet.Context;
 import org.mortbay.jetty.servlet.FilterHolder;
 import org.mortbay.jetty.servlet.ServletHolder;
 
-import com.trendmicro.hdfs.webdav.AuthFilter;
 import com.trendmicro.hdfs.webdav.HDFSWebDAVServlet;
 
 public class MiniClusterTestUtil {
@@ -187,8 +186,6 @@ public class MiniClusterTestUtil {
     servletHolder.setInitParameter("authenticate-header",
       "Basic realm=\"Hadoop WebDAV Server\"");
     servletContext.addServlet(servletHolder, "/*");
-    servletContext.addFilter(
-      new FilterHolder(new AuthFilter(getConfiguration())), "/*", 0);
     servletServer.setHandler(servletContext);
 
     servletServer.start();
